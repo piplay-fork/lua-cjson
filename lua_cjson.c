@@ -51,7 +51,7 @@
 #endif
 
 #ifndef CJSON_VERSION
-#define CJSON_VERSION   "2.1devel"
+#define CJSON_VERSION   "2.1pace"
 #endif
 
 /* Workaround for Solaris platforms missing isinf() */
@@ -59,9 +59,12 @@
 #define isinf(x) (!isnan(x) && isnan((x) - (x)))
 #endif
 
+#define ARRAY_CLASS "Array"
+
 #define DEFAULT_SPARSE_CONVERT 0
 #define DEFAULT_SPARSE_RATIO 2
 #define DEFAULT_SPARSE_SAFE 10
+#define DEFAULT_USE_ARRAY_CLASS 1
 #define DEFAULT_ENCODE_MAX_DEPTH 1000
 #define DEFAULT_DECODE_MAX_DEPTH 1000
 #define DEFAULT_ENCODE_INVALID_NUMBERS 0
@@ -127,6 +130,8 @@ typedef struct {
 
     int decode_invalid_numbers;
     int decode_max_depth;
+
+    int use_array_class;
 } json_config_t;
 
 typedef struct {
@@ -274,6 +279,13 @@ static int json_cfg_encode_sparse_array(lua_State *l)
     return 3;
 }
 
+static int json_cfg_use_array_class(lua_State *l)
+{
+    json_config_t *cfg = json_arg_init(l, 1);
+
+    return json_enum_option(l, 1, &cfg->use_array_class, NULL, 1);
+}
+
 /* Configures the maximum number of nested arrays/objects allowed when
  * encoding */
 static int json_cfg_encode_max_depth(lua_State *l)
@@ -384,6 +396,7 @@ static void json_create_config(lua_State *l)
     cfg->encode_sparse_convert = DEFAULT_SPARSE_CONVERT;
     cfg->encode_sparse_ratio = DEFAULT_SPARSE_RATIO;
     cfg->encode_sparse_safe = DEFAULT_SPARSE_SAFE;
+    cfg->use_array_class = DEFAULT_USE_ARRAY_CLASS;
     cfg->encode_max_depth = DEFAULT_ENCODE_MAX_DEPTH;
     cfg->decode_max_depth = DEFAULT_DECODE_MAX_DEPTH;
     cfg->encode_invalid_numbers = DEFAULT_ENCODE_INVALID_NUMBERS;
@@ -494,8 +507,24 @@ static int lua_array_length(lua_State *l, json_config_t *cfg, strbuf_t *json)
     int max;
     int items;
 
-    max = 0;
+    max = -1;
     items = 0;
+
+    if (cfg->use_array_class) {
+        int top = lua_gettop(l);
+        if (lua_getmetatable(l, -1) && !lua_isnil(l, -1)) {
+            lua_getglobal(l, ARRAY_CLASS);
+            if (lua_equal(l, -1, -2)) {
+              lua_getglobal(l, "table");
+              lua_getfield(l, -1, "maxn");
+              lua_pushvalue(l, -5);
+              lua_call(l, 1, 1);
+              max = lua_tointeger(l, -1);
+            }
+        }
+        lua_settop(l, top);
+        return max;
+    }
 
     lua_pushnil(l);
     /* table, startkey */
@@ -685,7 +714,7 @@ static void json_append_data(lua_State *l, json_config_t *cfg,
         current_depth++;
         json_check_encode_depth(l, cfg, current_depth, json);
         len = lua_array_length(l, cfg, json);
-        if (len > 0)
+        if (len >= 0)
             json_append_array(l, cfg, current_depth, json, len);
         else
             json_append_object(l, cfg, current_depth, json);
@@ -1198,7 +1227,13 @@ static void json_parse_array_context(lua_State *l, json_parse_t *json)
      * .., table, value */
     json_decode_descend(l, json, 2);
 
-    lua_newtable(l);
+    if (json->cfg->use_array_class) {
+        lua_getglobal(l, ARRAY_CLASS);
+        lua_call(l, 0, 1);
+        lua_remove(l, -2);
+    } else {
+        lua_newtable(l);
+    }
 
     json_next_token(json, &token);
 
@@ -1353,6 +1388,7 @@ static int lua_cjson_new(lua_State *l)
         { "encode", json_encode },
         { "decode", json_decode },
         { "encode_sparse_array", json_cfg_encode_sparse_array },
+        { "use_array_class", json_cfg_use_array_class },
         { "encode_max_depth", json_cfg_encode_max_depth },
         { "decode_max_depth", json_cfg_decode_max_depth },
         { "encode_number_precision", json_cfg_encode_number_precision },
