@@ -1238,7 +1238,6 @@ static void json_parse_array_context(lua_State *l, json_parse_t *json)
     if (json->cfg->use_array_class) {
         lua_getglobal(l, ARRAY_CLASS);
         lua_call(l, 0, 1);
-        lua_remove(l, -2);
     } else {
         lua_newtable(l);
     }
