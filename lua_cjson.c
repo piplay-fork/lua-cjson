@@ -659,7 +659,7 @@ static void json_append_object(lua_State *l, json_config_t *cfg,
         int top = lua_gettop(l);
         lua_pushvalue(l, -2);
         lua_call(l, 1, 1);
-        json_append_string(l, json, -1);
+        json_append_data(l, cfg, current_depth, json);
         lua_settop(l, top - 1);
     } else {
         /* Object */
