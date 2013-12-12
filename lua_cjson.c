@@ -655,7 +655,7 @@ static void json_append_object(lua_State *l, json_config_t *cfg,
 {
     int comma, keytype;
 
-    if (luaL_getmetafield(l, -1, "__tostring")) {
+    if (luaL_getmetafield(l, -1, "__tojson")) {
         int top = lua_gettop(l);
         lua_pushvalue(l, -2);
         lua_call(l, 1, 1);
